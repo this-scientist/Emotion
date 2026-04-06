@@ -8,12 +8,77 @@ import ScrollMarker from './components/ScrollMarker.vue'
 import BlockPanel from './components/BlockPanel.vue'
 import MappingDialog from './components/MappingDialog.vue'
 import MappingView from './components/MappingView.vue'
+import AuthPage from './components/AuthPage.vue'
+import FileManager from './components/FileManager.vue'
 import { useBlockManager } from './composables/useBlockManager'
 import { parseDocument } from './services/docParser'
 import { loadFromStorage } from './utils/storage'
 import type { ContentBlock } from './types/block'
 import type { SpeakerMapping } from './utils/extractSpeakers'
+import { supabase } from './lib/supabase'
+import type { UserFile } from './lib/supabase'
 
+// ── 认证/页面路由 ──
+// 'auth' | 'files' | 'editor'
+const appView = ref<'loading' | 'auth' | 'files' | 'editor'>('loading')
+// 打开文件时的内联错误提示（替代 alert）
+const openFileError = ref('')
+
+onMounted(async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  appView.value = session ? 'files' : 'auth'
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session) {
+      appView.value = 'auth'
+    }
+  })
+
+  // 如果 localStorage 有数据，不主动恢复（由用户从文件管理进入）
+})
+
+function handleAuthSuccess() {
+  appView.value = 'files'
+}
+
+function handleLogout() {
+  appView.value = 'auth'
+  // 清理编辑器状态
+  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
+  showMappingView.value = false
+}
+
+// 从文件管理器打开已有文件
+async function handleOpenFile(file: UserFile) {
+  openFileError.value = ''
+  if (file.file_content) {
+    try {
+      const lines = file.file_content.split('\n')
+      setDocument({
+        fileName: file.original_name || file.file_name,
+        content: lines,
+        blocks: (file.blocks_data as ContentBlock[]) || [],
+        totalLines: lines.length,
+      })
+      appView.value = 'editor'
+    } catch {
+      openFileError.value = '文件加载失败，请重新上传'
+    }
+  } else {
+    // Bug 1 修复：不用 alert()，改为设置内联错误状态，由 FileManager 展示
+    openFileError.value = '该文件暂无内容缓存，请重新上传'
+  }
+}
+
+// 从文件管理器点击「上传文件」
+function handleNewFile() {
+  // Bug 2 修复：先清空文档状态，确保进入编辑器时显示上传界面而非上次的文档
+  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
+  showMappingView.value = false
+  appView.value = 'editor'
+}
+
+// ── 编辑器状态 ──
 const {
   documentLoaded,
   blocks,
@@ -29,14 +94,12 @@ const {
 
 const docPreviewRef = ref<InstanceType<typeof DocPreview> | null>(null)
 
-// ── 分块编辑弹窗 ──
 const showBlockEditor = ref(false)
 const pendingBlock = ref<ContentBlock | null>(null)
 const pendingStartLine = ref(0)
 const pendingEndLine = ref(0)
 const pendingColor = ref('#54A0FF')
 
-// ── 映射弹窗 ──
 const showMappingDialog = ref(false)
 const mappingBlock = ref<ContentBlock | null>(null)
 const mappingBlockLines = computed<string[]>(() => {
@@ -44,7 +107,6 @@ const mappingBlockLines = computed<string[]>(() => {
   return content.value.slice(mappingBlock.value.startLine, mappingBlock.value.endLine + 1)
 })
 
-// ── 映射结果页 ──
 const showMappingView = ref(false)
 const mappingResult = ref<{ block: ContentBlock; mappings: SpeakerMapping[] } | null>(null)
 const mappingViewLines = computed<string[]>(() => {
@@ -53,12 +115,12 @@ const mappingViewLines = computed<string[]>(() => {
   return content.value.slice(b.startLine, b.endLine + 1)
 })
 
-onMounted(() => {
-  const savedState = loadFromStorage()
-  if (savedState && savedState.content.length > 0) {
-    setDocument(savedState)
-  }
-})
+const showResetConfirm = ref(false)
+function handleReset() { showResetConfirm.value = true }
+function confirmReset() {
+  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
+  showResetConfirm.value = false
+}
 
 async function handleFileSelected(file: File) {
   try {
@@ -69,6 +131,18 @@ async function handleFileSelected(file: File) {
       blocks: [],
       totalLines: result.content.length,
     })
+
+    // 保存文件到 Supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('user_files').insert({
+        user_id: user.id,
+        file_name: result.fileName,
+        original_name: result.fileName,
+        file_content: result.content.join('\n'),
+        file_meta: { totalLines: result.content.length },
+      })
+    }
   } catch (error) {
     alert(error instanceof Error ? error.message : '文件解析失败')
   }
@@ -108,20 +182,11 @@ function handleScrollToLine(lineIndex: number) {
   docPreviewRef.value?.scrollToLine(lineIndex)
 }
 
-const showResetConfirm = ref(false)
-function handleReset() { showResetConfirm.value = true }
-function confirmReset() {
-  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
-  showResetConfirm.value = false
-}
-
-// 打开映射弹窗
 function handleMapping(block: ContentBlock) {
   mappingBlock.value = block
   showMappingDialog.value = true
 }
 
-// 映射确认 → 跳转到结果页
 function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
   mappingResult.value = { block, mappings }
   showMappingDialog.value = false
@@ -130,8 +195,26 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-gray-50">
+  <!-- 加载中 -->
+  <div v-if="appView === 'loading'" class="h-screen flex items-center justify-center bg-gray-50">
+    <div class="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+  </div>
 
+  <!-- 登录/注册 -->
+  <AuthPage v-else-if="appView === 'auth'" @auth-success="handleAuthSuccess" />
+
+  <!-- 文件管理 -->
+  <FileManager
+    v-else-if="appView === 'files'"
+    :open-file-error="openFileError"
+    @logout="handleLogout"
+    @open-file="handleOpenFile"
+    @new-file="handleNewFile"
+    @clear-error="openFileError = ''"
+  />
+
+  <!-- 编辑器主界面 -->
+  <div v-else class="h-screen flex flex-col bg-gray-50">
     <!-- 重新上传确认弹窗 -->
     <Teleport to="body">
       <Transition name="fade">
@@ -147,6 +230,7 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
         </div>
       </Transition>
     </Teleport>
+
     <!-- 映射结果页（全屏覆盖） -->
     <Transition name="page-slide">
       <MappingView
@@ -163,6 +247,13 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
       <!-- Header -->
       <header class="flex-shrink-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 shadow-sm">
         <div class="flex items-center gap-3">
+          <!-- 返回文件管理 -->
+          <button
+            class="flex items-center gap-1.5 text-sm text-gray-400 hover:text-indigo-500 transition-colors mr-1"
+            @click="appView = 'files'"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
           <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
             <FileText class="w-4 h-4 text-white" />
           </div>
@@ -252,5 +343,14 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
 .page-slide-leave-to {
   opacity: 0;
   transform: translateX(40px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
