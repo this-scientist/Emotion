@@ -3,13 +3,16 @@ import { computed, ref, watch } from 'vue'
 import {
   ArrowLeft, Download, Table2, Trash2,
   Pencil, Check, X, CheckSquare, Square, Pen,
-  Plus, ChevronDown, ChevronUp, MessageSquare,
+  Plus, ChevronDown, ChevronUp, MessageSquare, Bot, FileText,
 } from 'lucide-vue-next'
 import { applyMapping, type SpeakerMapping, type FormattedLine } from '../utils/extractSpeakers'
 import { exportMixedDocx, downloadBlob, type DocItem } from '../utils/exportDocx'
 import type { ContentBlock } from '../types/block'
 import type { TableRowData } from './TableEditor.vue'
-import { INTENTS, TECHS, type IntentItem, type TechItem } from '../data/tableData'
+import { INTENTS, TECHS, type IntentItem, type TechItem, intentLabel, techLabel } from '../data/tableData'
+import AnalysisPanel from './AnalysisPanel.vue'
+import ReportViewer from './ReportViewer.vue'
+import type { AnalysisPayload, AnalysisReport } from '../lib/agentApi'
 
 const props = defineProps<{
   block: ContentBlock
@@ -216,6 +219,43 @@ async function handleExport() {
 
 const tableCount = computed(() => { let n = 0; embeddedTables.value.forEach(l => { n += l.length }); return n })
 
+// ── AI 督导 ──
+const showAnalysisPanel = ref(false)
+const showReportViewer  = ref(false)
+const reports = ref<AnalysisReport[]>([])
+
+/** 将当前视图数据组装成 AnalysisPayload */
+const analysisPayload = computed<AnalysisPayload>(() => {
+  const transcript = lines.value.map(l => ({
+    role: l.data.type === 'speech' ? l.data.role : ('plain' as const),
+    content: l.data.type === 'speech' ? l.data.content : (l.data as any).text ?? '',
+  }))
+
+  const tables = Array.from(embeddedTables.value.entries()).map(([lineIdx, tbls]) => ({
+    afterLineIndex: lineIdx,
+    rows: tbls.flatMap(t => t.rows.map(r => ({
+      intents: r.intents.map(i => intentLabel(i)),
+      techs:   r.techs.map(t => techLabel(t)),
+      scoreC:  r.scoreC,
+      scoreV:  r.scoreV,
+      reaction: r.reaction,
+      betterIntervention: r.betterIntervention,
+    })))
+  }))
+
+  return {
+    blockName: props.block.name,
+    transcript,
+    tables,
+  }
+})
+
+function handleReportReady(report: AnalysisReport) {
+  reports.value.push(report)
+  showAnalysisPanel.value = false
+  showReportViewer.value  = true
+}
+
 function getRoleStyle(role: 'counselor' | 'visitor') {
   return role === 'counselor'
     ? { bg: 'bg-violet-50', border: 'border-l-4 border-violet-400', label: 'text-violet-700 bg-violet-100' }
@@ -281,6 +321,16 @@ const SCORES = ['1', '2', '3', '4', '5']
           ><Trash2 class="w-4 h-4" />删除所选<span v-if="hasSelected">({{ selectedIds.size }})</span></button>
         </template>
         <button
+          class="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium transition-all border"
+          :class="showAnalysisPanel ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-white text-violet-600 border-violet-200 hover:bg-violet-50'"
+          @click="showAnalysisPanel = !showAnalysisPanel"
+        ><Bot class="w-4 h-4" />AI 督导</button>
+        <button
+          v-if="reports.length"
+          class="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium transition-all bg-white border border-violet-200 text-violet-500 hover:bg-violet-50"
+          @click="showReportViewer = true"
+        ><FileText class="w-4 h-4" />查看报告 <span class="bg-violet-100 text-violet-600 text-[10px] px-1.5 py-0.5 rounded-full">{{ reports.length }}</span></button>
+        <button
           class="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium transition-all"
           :class="exporting ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-500 text-white hover:bg-indigo-600'"
           :disabled="exporting" @click="handleExport"
@@ -289,7 +339,8 @@ const SCORES = ['1', '2', '3', '4', '5']
     </header>
 
     <!-- ── 主内容 ── -->
-    <main class="flex-1 overflow-auto">
+    <div class="flex-1 flex overflow-hidden min-h-0">
+      <main class="flex-1 overflow-auto">
       <div class="max-w-4xl mx-auto px-6 py-5">
 
         <!-- 提示栏 -->
@@ -793,6 +844,25 @@ const SCORES = ['1', '2', '3', '4', '5']
         </div>
       </div>
     </main>
+
+      <!-- ── 右侧 AI 督导面板 ── -->
+      <Transition name="panel-slide">
+        <div v-if="showAnalysisPanel" class="w-96 flex-shrink-0 border-l border-gray-100 overflow-hidden">
+          <AnalysisPanel
+            :payload="analysisPayload"
+            class="h-full"
+            @report-ready="handleReportReady"
+          />
+        </div>
+      </Transition>
+    </div>
+
+    <!-- ── 报告预览弹窗 ── -->
+    <ReportViewer
+      :reports="reports"
+      :visible="showReportViewer"
+      @close="showReportViewer = false"
+    />
   </div>
 </template>
 
@@ -808,4 +878,7 @@ const SCORES = ['1', '2', '3', '4', '5']
 .inline-expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
 .inline-expand-enter-from, .inline-expand-leave-to { opacity: 0; max-height: 0 !important; }
 .inline-expand-enter-to, .inline-expand-leave-from { opacity: 1; max-height: 2000px; }
+.panel-slide-enter-active, .panel-slide-leave-active { transition: all 0.28s ease; overflow: hidden; }
+.panel-slide-enter-from, .panel-slide-leave-to { opacity: 0; width: 0; min-width: 0; }
+.panel-slide-enter-to, .panel-slide-leave-from { opacity: 1; width: 24rem; }
 </style>
