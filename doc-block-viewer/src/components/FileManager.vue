@@ -11,6 +11,11 @@ const emit = defineEmits<{
   (e: 'logout'): void
   (e: 'open-file', file: UserFile): void
   (e: 'new-file'): void
+  (e: 'clear-error'): void
+}>()
+
+const props = defineProps<{
+  openFileError?: string
 }>()
 
 // ── 状态 ──
@@ -220,6 +225,19 @@ function formatDate(dateStr: string) {
         </button>
       </div>
     </header>
+
+    <!-- 内联错误提示（替代 alert） -->
+    <Transition name="fade">
+      <div v-if="openFileError" class="flex items-center justify-between gap-3 px-6 py-3 bg-red-50 border-b border-red-100">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-red-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p class="text-sm text-red-600">{{ openFileError }}</p>
+        </div>
+        <button class="text-red-400 hover:text-red-600 flex-shrink-0" @click="emit('clear-error')">
+          <X class="w-4 h-4" />
+        </button>
+      </div>
+    </Transition>
 
     <!-- Main -->
     <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">

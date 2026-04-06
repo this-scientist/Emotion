@@ -21,6 +21,8 @@ import type { UserFile } from './lib/supabase'
 // ── 认证/页面路由 ──
 // 'auth' | 'files' | 'editor'
 const appView = ref<'loading' | 'auth' | 'files' | 'editor'>('loading')
+// 打开文件时的内联错误提示（替代 alert）
+const openFileError = ref('')
 
 onMounted(async () => {
   const { data: { session } } = await supabase.auth.getSession()
@@ -48,6 +50,7 @@ function handleLogout() {
 
 // 从文件管理器打开已有文件
 async function handleOpenFile(file: UserFile) {
+  openFileError.value = ''
   if (file.file_content) {
     try {
       const lines = file.file_content.split('\n')
@@ -59,15 +62,19 @@ async function handleOpenFile(file: UserFile) {
       })
       appView.value = 'editor'
     } catch {
-      alert('文件加载失败')
+      openFileError.value = '文件加载失败，请重新上传'
     }
   } else {
-    alert('该文件暂无内容缓存，请重新上传')
+    // Bug 1 修复：不用 alert()，改为设置内联错误状态，由 FileManager 展示
+    openFileError.value = '该文件暂无内容缓存，请重新上传'
   }
 }
 
 // 从文件管理器点击「上传文件」
 function handleNewFile() {
+  // Bug 2 修复：先清空文档状态，确保进入编辑器时显示上传界面而非上次的文档
+  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
+  showMappingView.value = false
   appView.value = 'editor'
 }
 
@@ -199,9 +206,11 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
   <!-- 文件管理 -->
   <FileManager
     v-else-if="appView === 'files'"
+    :open-file-error="openFileError"
     @logout="handleLogout"
     @open-file="handleOpenFile"
     @new-file="handleNewFile"
+    @clear-error="openFileError = ''"
   />
 
   <!-- 编辑器主界面 -->
