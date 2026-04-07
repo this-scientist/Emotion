@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  emotion-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      # 环境变量可以在运行时通过docker-compose override或.env文件设置
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-https://kvwdkesrirxiuosnublw.supabase.co}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBahbGFzZSIsInJlZiI6Imt2d2RrZXNyaXJ4aXVvc251Ymx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NDU1ODUsImV4cCI6MjA5MTAyMTU4NX0.u-mk-7ZR3SRuezk_Fm1PAmGrML517QYf9aozH-5cr4k}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - emotion-network
+
+  # 如果需要本地Supabase开发环境，可以取消注释以下内容
+  # supabase-local:
+  #   image: supabase/postgres:latest
+  #   environment:
+  #     - POSTGRES_PASSWORD=postgres
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - supabase-data:/var/lib/postgresql/data
+  #   networks:
+  #     - emotion-network
+
+networks:
+  emotion-network:
+    driver: bridge
+
+# volumes:
+#   supabase-data:
