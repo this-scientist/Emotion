@@ -74,6 +74,9 @@ function json(body: unknown, status = 200): Response {
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, X-Request-ID",
     },
   });
 }
@@ -89,6 +92,19 @@ async function decryptField<T>(
 }
 
 export async function handleRequest(req: Request, deps: Deps = buildDeps()): Promise<Response> {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, X-Request-ID",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+
   try {
     const user = await deps.authenticate(req);
     const dek = await deps.loadOrCreateDek(user.id);
