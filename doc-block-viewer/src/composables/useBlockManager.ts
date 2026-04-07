@@ -1,8 +1,9 @@
 import { ref, computed } from 'vue'
 import type { ContentBlock, DocState, LineSelection } from '../types/block'
-import { saveToStorage, generateBlockColor } from '../utils/storage'
+import { generateBlockColor } from '../utils/storage'
 
 const state = ref<DocState>({
+  fileId: null,
   fileName: '',
   content: [],
   blocks: [],
@@ -16,6 +17,7 @@ const selection = ref<LineSelection>({
 
 export function useBlockManager() {
   const documentLoaded = computed(() => state.value.content.length > 0)
+  const fileId = computed(() => state.value.fileId)
   const blocks = computed(() => state.value.blocks)
   const content = computed(() => state.value.content)
   const fileName = computed(() => state.value.fileName)
@@ -24,7 +26,6 @@ export function useBlockManager() {
   function setDocument(docState: DocState) {
     state.value = docState
     selection.value = { startLine: null, endLine: null }
-    saveToStorage(state.value)
   }
 
   function createBlock(name: string, startLine: number, endLine: number, color?: string): ContentBlock {
@@ -37,7 +38,6 @@ export function useBlockManager() {
       createdAt: Date.now(),
     }
     state.value.blocks.push(block)
-    saveToStorage(state.value)
     return block
   }
 
@@ -45,7 +45,6 @@ export function useBlockManager() {
     const index = state.value.blocks.findIndex((b) => b.id === id)
     if (index !== -1) {
       state.value.blocks[index] = { ...state.value.blocks[index], ...updates }
-      saveToStorage(state.value)
     }
   }
 
@@ -53,7 +52,6 @@ export function useBlockManager() {
     const index = state.value.blocks.findIndex((b) => b.id === id)
     if (index !== -1) {
       state.value.blocks.splice(index, 1)
-      saveToStorage(state.value)
     }
   }
 
@@ -92,6 +90,7 @@ export function useBlockManager() {
     state,
     selection,
     documentLoaded,
+    fileId,
     blocks,
     content,
     fileName,

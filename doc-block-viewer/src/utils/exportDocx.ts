@@ -1,7 +1,7 @@
 import {
   Document, Packer, Table, TableRow, TableCell,
   Paragraph, TextRun, WidthType, AlignmentType,
-  VerticalAlign, BorderStyle,
+  BorderStyle, VerticalAlignTable,
 } from 'docx'
 import type { TableRowData } from '../components/TableEditor.vue'
 import { intentLabel, techLabel } from '../data/tableData'
@@ -23,7 +23,7 @@ function cell(
     rowSpan?: number
     columnSpan?: number
     align?: typeof AlignmentType[keyof typeof AlignmentType]
-    vAlign?: typeof VerticalAlign[keyof typeof VerticalAlign]
+    vAlign?: typeof VerticalAlignTable[keyof typeof VerticalAlignTable]
     width?: number
   } = {}
 ): TableCell {
@@ -31,7 +31,7 @@ function cell(
   return new TableCell({
     rowSpan: opts.rowSpan,
     columnSpan: opts.columnSpan,
-    verticalAlign: opts.vAlign ?? VerticalAlign.CENTER,
+    verticalAlign: opts.vAlign ?? VerticalAlignTable.CENTER,
     width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
     borders: { top: b, bottom: b, left: b, right: b },
     children: [
@@ -68,13 +68,13 @@ function buildTable(rows: TableRowData[]): Table {
     new TableRow({
       children: [
         cell(row.intents.map(i => intentLabel(i)).join('、'),
-          { align: AlignmentType.LEFT, vAlign: VerticalAlign.TOP }),
+          { align: AlignmentType.LEFT, vAlign: VerticalAlignTable.TOP }),
         cell(row.techs.map(t => techLabel(t)).join('\n'),
-          { align: AlignmentType.LEFT, vAlign: VerticalAlign.TOP }),
+          { align: AlignmentType.LEFT, vAlign: VerticalAlignTable.TOP }),
         cell(row.scoreC  ?? '', { align: AlignmentType.CENTER }),
         cell(row.scoreV  ?? '', { align: AlignmentType.CENTER }),
-        cell(row.reaction ?? '', { align: AlignmentType.LEFT, vAlign: VerticalAlign.TOP }),
-        cell(row.betterIntervention ?? '', { align: AlignmentType.LEFT, vAlign: VerticalAlign.TOP }),
+        cell(row.reaction ?? '', { align: AlignmentType.LEFT, vAlign: VerticalAlignTable.TOP }),
+        cell(row.betterIntervention ?? '', { align: AlignmentType.LEFT, vAlign: VerticalAlignTable.TOP }),
       ],
     })
   )

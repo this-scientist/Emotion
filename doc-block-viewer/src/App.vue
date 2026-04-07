@@ -1,86 +1,41 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { FileUp, FileText } from 'lucide-vue-next'
-import FileUploader from './components/FileUploader.vue'
-import DocPreview from './components/DocPreview.vue'
+import AuthPage from './components/AuthPage.vue'
 import BlockEditor from './components/BlockEditor.vue'
-import ScrollMarker from './components/ScrollMarker.vue'
 import BlockPanel from './components/BlockPanel.vue'
+import DocPreview from './components/DocPreview.vue'
+import FileManager from './components/FileManager.vue'
+import FileUploader from './components/FileUploader.vue'
 import MappingDialog from './components/MappingDialog.vue'
 import MappingView from './components/MappingView.vue'
-import AuthPage from './components/AuthPage.vue'
-import FileManager from './components/FileManager.vue'
+import ScrollMarker from './components/ScrollMarker.vue'
 import { useBlockManager } from './composables/useBlockManager'
-import { parseDocument } from './services/docParser'
-import { loadFromStorage } from './utils/storage'
-import type { ContentBlock } from './types/block'
-import type { SpeakerMapping } from './utils/extractSpeakers'
 import { supabase } from './lib/supabase'
 import type { UserFile } from './lib/supabase'
+import { parseDocument } from './services/docParser'
+import {
+  findBlockMappings,
+  toDocState,
+  upsertBlockMappings,
+} from './services/secureFileMapper'
+import {
+  createSecureFile,
+  getSecureFile,
+  saveSecureBlocks,
+  saveSecureMappings,
+} from './services/secureFilesApi'
+import type { ContentBlock, DocState } from './types/block'
+import type { BlockMappings } from './types/secureFiles'
+import type { SpeakerMapping } from './utils/extractSpeakers'
 
-// ── 认证/页面路由 ──
-// 'auth' | 'files' | 'editor'
 const appView = ref<'loading' | 'auth' | 'files' | 'editor'>('loading')
-// 打开文件时的内联错误提示（替代 alert）
 const openFileError = ref('')
+const blockMappings = ref<BlockMappings[]>([])
 
-onMounted(async () => {
-  const { data: { session } } = await supabase.auth.getSession()
-  appView.value = session ? 'files' : 'auth'
-
-  supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) {
-      appView.value = 'auth'
-    }
-  })
-
-  // 如果 localStorage 有数据，不主动恢复（由用户从文件管理进入）
-})
-
-function handleAuthSuccess() {
-  appView.value = 'files'
-}
-
-function handleLogout() {
-  appView.value = 'auth'
-  // 清理编辑器状态
-  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
-  showMappingView.value = false
-}
-
-// 从文件管理器打开已有文件
-async function handleOpenFile(file: UserFile) {
-  openFileError.value = ''
-  if (file.file_content) {
-    try {
-      const lines = file.file_content.split('\n')
-      setDocument({
-        fileName: file.original_name || file.file_name,
-        content: lines,
-        blocks: (file.blocks_data as ContentBlock[]) || [],
-        totalLines: lines.length,
-      })
-      appView.value = 'editor'
-    } catch {
-      openFileError.value = '文件加载失败，请重新上传'
-    }
-  } else {
-    // Bug 1 修复：不用 alert()，改为设置内联错误状态，由 FileManager 展示
-    openFileError.value = '该文件暂无内容缓存，请重新上传'
-  }
-}
-
-// 从文件管理器点击「上传文件」
-function handleNewFile() {
-  // Bug 2 修复：先清空文档状态，确保进入编辑器时显示上传界面而非上次的文档
-  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
-  showMappingView.value = false
-  appView.value = 'editor'
-}
-
-// ── 编辑器状态 ──
 const {
   documentLoaded,
+  fileId,
   blocks,
   content,
   fileName,
@@ -106,43 +61,117 @@ const mappingBlockLines = computed<string[]>(() => {
   if (!mappingBlock.value) return []
   return content.value.slice(mappingBlock.value.startLine, mappingBlock.value.endLine + 1)
 })
+const activeBlockMappings = computed<SpeakerMapping[]>(() => {
+  if (!mappingBlock.value) return []
+  return findBlockMappings(blockMappings.value, mappingBlock.value.id)
+})
 
 const showMappingView = ref(false)
 const mappingResult = ref<{ block: ContentBlock; mappings: SpeakerMapping[] } | null>(null)
 const mappingViewLines = computed<string[]>(() => {
   if (!mappingResult.value) return []
-  const b = mappingResult.value.block
-  return content.value.slice(b.startLine, b.endLine + 1)
+  const block = mappingResult.value.block
+  return content.value.slice(block.startLine, block.endLine + 1)
 })
 
 const showResetConfirm = ref(false)
-function handleReset() { showResetConfirm.value = true }
+
+function emptyDocumentState(): DocState {
+  return {
+    fileId: null,
+    fileName: '',
+    content: [],
+    blocks: [],
+    totalLines: 0,
+  }
+}
+
+function resetEditorState() {
+  setDocument(emptyDocumentState())
+  blockMappings.value = []
+  showMappingDialog.value = false
+  showMappingView.value = false
+  mappingBlock.value = null
+  mappingResult.value = null
+}
+
+onMounted(async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  appView.value = session ? 'files' : 'auth'
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session) {
+      resetEditorState()
+      appView.value = 'auth'
+    }
+  })
+})
+
+function handleAuthSuccess() {
+  appView.value = 'files'
+}
+
+function handleLogout() {
+  resetEditorState()
+  appView.value = 'auth'
+}
+
+async function handleOpenFile(file: UserFile) {
+  openFileError.value = ''
+
+  try {
+    const secureFile = await getSecureFile(file.id)
+    setDocument(toDocState(secureFile))
+    blockMappings.value = secureFile.mappings ?? []
+    showMappingView.value = false
+    mappingResult.value = null
+    appView.value = 'editor'
+  } catch {
+    openFileError.value = '文件加载失败，请重新打开'
+  }
+}
+
+function handleNewFile() {
+  resetEditorState()
+  appView.value = 'editor'
+}
+
+function handleReset() {
+  showResetConfirm.value = true
+}
+
 function confirmReset() {
-  setDocument({ fileName: '', content: [], blocks: [], totalLines: 0 })
+  resetEditorState()
   showResetConfirm.value = false
+}
+
+async function persistBlocks() {
+  if (!fileId.value) return
+  await saveSecureBlocks(fileId.value, blocks.value)
+}
+
+async function persistMappings(nextMappings: BlockMappings[]) {
+  if (!fileId.value) return
+  await saveSecureMappings(fileId.value, nextMappings)
 }
 
 async function handleFileSelected(file: File) {
   try {
     const result = await parseDocument(file)
+    const created = await createSecureFile({
+      fileName: result.fileName,
+      originalName: result.fileName,
+      content: result.content,
+    })
+
     setDocument({
+      fileId: created.id,
       fileName: result.fileName,
       content: result.content,
       blocks: [],
       totalLines: result.content.length,
     })
-
-    // 保存文件到 Supabase
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from('user_files').insert({
-        user_id: user.id,
-        file_name: result.fileName,
-        original_name: result.fileName,
-        file_content: result.content.join('\n'),
-        file_meta: { totalLines: result.content.length },
-      })
-    }
+    blockMappings.value = []
   } catch (error) {
     alert(error instanceof Error ? error.message : '文件解析失败')
   }
@@ -164,18 +193,37 @@ function handleEditBlock(block: ContentBlock) {
   showBlockEditor.value = true
 }
 
-function handleSaveBlock(name: string, color: string) {
+async function handleSaveBlock(name: string, color: string) {
   if (pendingBlock.value) {
     updateBlock(pendingBlock.value.id, { name, color })
   } else {
     createBlock(name, pendingStartLine.value, pendingEndLine.value, color)
   }
+
+  try {
+    await persistBlocks()
+  } catch (error) {
+    alert(error instanceof Error ? error.message : '分块保存失败')
+  }
+
   showBlockEditor.value = false
   clearSelection()
 }
 
-function handleDeleteBlock(id: string) {
+async function handleDeleteBlock(id: string) {
   deleteBlock(id)
+
+  const nextMappings = blockMappings.value.filter((item) => item.blockId !== id)
+  blockMappings.value = nextMappings
+
+  try {
+    await Promise.all([
+      persistBlocks(),
+      persistMappings(nextMappings),
+    ])
+  } catch (error) {
+    alert(error instanceof Error ? error.message : '分块删除失败')
+  }
 }
 
 function handleScrollToLine(lineIndex: number) {
@@ -187,10 +235,18 @@ function handleMapping(block: ContentBlock) {
   showMappingDialog.value = true
 }
 
-function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
+async function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
+  const nextMappings = upsertBlockMappings(blockMappings.value, block.id, mappings)
+  blockMappings.value = nextMappings
   mappingResult.value = { block, mappings }
   showMappingDialog.value = false
   showMappingView.value = true
+
+  try {
+    await persistMappings(nextMappings)
+  } catch (error) {
+    alert(error instanceof Error ? error.message : '角色映射保存失败')
+  }
 }
 </script>
 
@@ -324,6 +380,7 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
         :visible="showMappingDialog"
         :block="mappingBlock"
         :block-lines="mappingBlockLines"
+        :existing-mappings="activeBlockMappings"
         @close="showMappingDialog = false"
         @confirm="handleMappingConfirm"
       />

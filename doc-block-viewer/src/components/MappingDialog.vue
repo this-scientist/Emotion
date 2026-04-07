@@ -8,6 +8,7 @@ const props = defineProps<{
   visible: boolean
   block: ContentBlock | null
   blockLines: string[]   // 该块对应的文本行
+  existingMappings?: SpeakerMapping[]
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +23,14 @@ const visitors = ref<string[]>([])     // 选中的来访者
 watch(() => props.visible, (v) => {
   if (v && props.blockLines.length) {
     speakers.value = extractSpeakers(props.blockLines)
+    counselors.value = (props.existingMappings ?? [])
+      .filter((mapping) => mapping.role === 'counselor' && speakers.value.includes(mapping.speaker))
+      .map((mapping) => mapping.speaker)
+    visitors.value = (props.existingMappings ?? [])
+      .filter((mapping) => mapping.role === 'visitor' && speakers.value.includes(mapping.speaker))
+      .map((mapping) => mapping.speaker)
+  } else if (!v) {
+    speakers.value = []
     counselors.value = []
     visitors.value = []
   }

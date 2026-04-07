@@ -8,6 +8,7 @@ export interface ContentBlock {
 }
 
 export interface DocState {
+  fileId: string | null
   fileName: string
   content: string[]
   blocks: ContentBlock[]

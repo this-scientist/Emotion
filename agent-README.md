@@ -202,3 +202,41 @@ src/
     ├── agentApi.ts        # 统一 Agent 接口层（核心，平台无关）
     └── agentConfig.ts     # 督导 Agent 配置表（system prompt + 端点）
 ```
+
+---
+
+## 数据隐私改造
+
+当前分支已补上用户文件的隐私保护方案，目标是避免普通数据库读取者直接看到逐字稿正文、分块结果和角色映射等敏感内容。
+
+### 当前方案
+
+- 继续使用 Supabase Auth，密码仍由 Supabase 官方认证体系管理，不在业务表中自行存储或处理
+- 在 `public.user_files` 中，以下敏感字段改为通过后端加密后再落库：
+  - `file_content`
+  - `blocks_data`
+  - `mappings_data`
+- 新增 `public.user_encryption_keys`，为每个用户保存一把经服务端 KEK 包裹后的 DEK
+- 前端不再把文档内容、分块信息写入 `localStorage`
+- 敏感数据的创建、读取、更新统一走 Supabase Edge Function `secure-files`
+
+### 加密与解密边界
+
+- 加密算法：`AES-256-GCM`
+- 粒度：按用户、按文件、按字段进行 AAD 绑定
+- 解密位置：仅在受信任的后端函数内完成，前端拿到的是已授权解密后的结果
+- 明文保留字段：`original_name`
+
+### 当前范围
+
+- 已覆盖：上传文件、打开文件、保存分块、保存角色映射
+- 暂不处理：`analysis_data`
+- 暂不做历史数据迁移：当前阶段没有线上存量数据，直接基于旧表结构升级
+
+### 相关目录
+
+- `supabase/migrations/20260407120000_secure_user_files.sql`
+- `supabase/functions/secure-files/index.ts`
+- `supabase/functions/_shared/crypto.ts`
+- `doc-block-viewer/src/services/secureFilesApi.ts`
+- `doc-block-viewer/src/services/secureFileMapper.ts`

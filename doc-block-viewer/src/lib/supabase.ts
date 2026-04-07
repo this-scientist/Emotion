@@ -33,11 +33,11 @@ export interface UserFile {
   folder_id: string | null
   file_name: string
   original_name: string
-  file_content: string | null
-  file_meta: Record<string, any> | null
-  blocks_data: any[] | null
-  mappings_data: any[] | null
-  analysis_data: any | null
+  file_content: Record<string, unknown> | null
+  file_meta: Record<string, unknown> | null
+  blocks_data: Record<string, unknown> | null
+  mappings_data: Record<string, unknown> | null
+  analysis_data: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }

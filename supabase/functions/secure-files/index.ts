@@ -1,6 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { authenticateRequest } from "../_shared/auth.ts";
-import { decryptJson, encryptJson } from "../_shared/crypto.ts";
+import {
+  decryptJson,
+  encryptJson,
+  type EncryptedEnvelope,
+} from "../_shared/crypto.ts";
 import { loadOrCreateUserDek } from "../_shared/userKeys.ts";
 
 interface Deps {
@@ -74,6 +78,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+async function decryptField<T>(
+  dek: Uint8Array,
+  envelope: EncryptedEnvelope | null,
+  aad: string,
+  fallback: T,
+): Promise<T> {
+  if (!envelope) return fallback;
+  return decryptJson<T>(dek, envelope, aad);
+}
+
 export async function handleRequest(req: Request, deps: Deps = buildDeps()): Promise<Response> {
   try {
     const user = await deps.authenticate(req);
@@ -82,13 +96,15 @@ export async function handleRequest(req: Request, deps: Deps = buildDeps()): Pro
 
     if (req.method === "POST") {
       const body = await req.json();
+      const fileId = crypto.randomUUID();
       const fileContent = await encryptJson(
         dek,
         body.content,
-        `${user.id}:new:file_content:v1`,
+        `${user.id}:${fileId}:file_content:v1`,
       );
 
       const inserted = await deps.insertFile({
+        id: fileId,
         user_id: user.id,
         file_name: body.fileName,
         original_name: body.originalName,
@@ -108,13 +124,24 @@ export async function handleRequest(req: Request, deps: Deps = buildDeps()): Pro
       const row = await deps.getFile(fileId, user.id);
       if (!row) return json({ message: "not found" }, 404);
 
-      const content = row.file_content
-        ? await decryptJson<string[]>(
-            dek,
-            row.file_content,
-            `${user.id}:${fileId}:file_content:v1`,
-          )
-        : [];
+      const content = await decryptField<string[]>(
+        dek,
+        row.file_content as EncryptedEnvelope | null,
+        `${user.id}:${fileId}:file_content:v1`,
+        [],
+      );
+      const blocks = await decryptField(
+        dek,
+        row.blocks_data as EncryptedEnvelope | null,
+        `${user.id}:${fileId}:blocks_data:v1`,
+        [],
+      );
+      const mappings = await decryptField(
+        dek,
+        row.mappings_data as EncryptedEnvelope | null,
+        `${user.id}:${fileId}:mappings_data:v1`,
+        [],
+      );
 
       return json({
         id: row.id,
@@ -122,8 +149,8 @@ export async function handleRequest(req: Request, deps: Deps = buildDeps()): Pro
         originalName: row.original_name,
         totalLines: row.file_meta?.totalLines ?? content.length,
         content,
-        blocks: row.blocks_data ?? [],
-        mappings: row.mappings_data ?? [],
+        blocks,
+        mappings,
       });
     }
 
