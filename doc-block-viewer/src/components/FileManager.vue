@@ -58,6 +58,13 @@ const isEmpty = computed(() => currentFolders.value.length === 0 && currentFiles
 
 // ── 初始化 ──
 onMounted(async () => {
+  // 首先检查用户是否已登录
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    loading.value = false
+    return
+  }
+  
   await fetchUserInfo()
   await fetchData()
 })
@@ -72,17 +79,34 @@ async function fetchUserInfo() {
 
 async function fetchData() {
   loading.value = true
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) { loading.value = false; return }
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { 
+      console.log('用户未登录，跳过数据加载')
+      loading.value = false
+      return 
+    }
 
-  const [foldersRes, filesRes] = await Promise.all([
-    supabase.from('folders').select('*').eq('user_id', user.id).order('name'),
-    supabase.from('user_files').select('id,user_id,folder_id,file_name,original_name,file_meta,created_at,updated_at').eq('user_id', user.id).order('updated_at', { ascending: false })
-  ])
+    const [foldersRes, filesRes] = await Promise.all([
+      supabase.from('folders').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('user_files').select('id,user_id,folder_id,file_name,original_name,file_meta,created_at,updated_at').eq('user_id', user.id).order('updated_at', { ascending: false })
+    ])
 
-  if (foldersRes.data) folders.value = foldersRes.data
-  if (filesRes.data) files.value = filesRes.data as UserFile[]
-  loading.value = false
+    if (foldersRes.error) {
+      console.error('加载文件夹失败:', foldersRes.error)
+    }
+    if (filesRes.error) {
+      console.error('加载文件失败:', filesRes.error)
+    }
+
+    if (foldersRes.data) folders.value = foldersRes.data
+    if (filesRes.data) files.value = filesRes.data as UserFile[]
+  } catch (error) {
+    console.error('加载数据时出错:', error)
+  } finally {
+    loading.value = false
+  }
 }
 
 // ── 导航 ──
