@@ -8,6 +8,11 @@ interface Deps {
   loadOrCreateDek: (userId: string) => Promise<Uint8Array>;
   insertFile: (payload: Record<string, unknown>) => Promise<{ id: string; created_at: string }>;
   getFile: (fileId: string, userId: string) => Promise<Record<string, any> | null>;
+  updateFile: (
+    fileId: string,
+    userId: string,
+    payload: Record<string, unknown>,
+  ) => Promise<Record<string, any> | null>;
 }
 
 function serviceClient() {
@@ -39,6 +44,18 @@ function buildDeps(): Deps {
         .select("id,file_name,original_name,file_meta,file_content,blocks_data,mappings_data")
         .eq("id", fileId)
         .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    updateFile: async (fileId, userId, payload) => {
+      const { data, error } = await admin
+        .from("user_files")
+        .update(payload)
+        .eq("id", fileId)
+        .eq("user_id", userId)
+        .select("id")
         .maybeSingle();
 
       if (error) throw error;
@@ -108,6 +125,25 @@ export async function handleRequest(req: Request, deps: Deps = buildDeps()): Pro
         blocks: row.blocks_data ?? [],
         mappings: row.mappings_data ?? [],
       });
+    }
+
+    if (req.method === "PATCH") {
+      const body = await req.json();
+      const fileId = body.fileId as string;
+      const op = body.op as "blocks" | "mappings";
+      const field = op === "blocks" ? "blocks_data" : "mappings_data";
+      const envelope = await encryptJson(
+        dek,
+        body.value,
+        `${user.id}:${fileId}:${field}:v1`,
+      );
+
+      const updated = await deps.updateFile(fileId, user.id, {
+        [field]: envelope,
+      });
+
+      if (!updated) return json({ message: "not found" }, 404);
+      return json({ ok: true });
     }
 
     return json({ message: "method not allowed" }, 405);

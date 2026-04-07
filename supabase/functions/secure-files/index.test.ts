@@ -26,6 +26,9 @@ Deno.test("POST creates an encrypted file record", async () => {
       getFile: async () => {
         throw new Error("not used");
       },
+      updateFile: async () => {
+        throw new Error("not used");
+      },
     },
   );
 
@@ -63,6 +66,9 @@ Deno.test("GET returns decrypted file content for the owner", async () => {
         blocks_data: null,
         mappings_data: null,
       }),
+      updateFile: async () => {
+        throw new Error("not used");
+      },
     },
   );
 
@@ -70,4 +76,64 @@ Deno.test("GET returns decrypted file content for the owner", async () => {
 
   assertEquals(response.status, 200);
   assertEquals(json.content, ["line 1", "line 2"]);
+});
+
+Deno.test("PATCH persists encrypted blocks", async () => {
+  let updatedPayload: Record<string, unknown> | null = null;
+
+  const response = await handleRequest(
+    new Request("https://example.com/secure-files", {
+      method: "PATCH",
+      body: JSON.stringify({
+        fileId: "file-1",
+        op: "blocks",
+        value: [{ id: "block-1", name: "intro", startLine: 0, endLine: 3, color: "#fff", createdAt: 1 }],
+      }),
+    }),
+    {
+      authenticate: async () => user,
+      loadOrCreateDek: async () => new Uint8Array(32).fill(5),
+      insertFile: async () => {
+        throw new Error("not used");
+      },
+      getFile: async () => ({ id: "file-1" }),
+      updateFile: async (fileId: string, userId: string, payload: Record<string, unknown>) => {
+        updatedPayload = payload;
+        return { id: fileId, user_id: userId };
+      },
+    } as any,
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(typeof updatedPayload?.["blocks_data"], "object");
+});
+
+Deno.test("PATCH persists encrypted mappings", async () => {
+  let updatedPayload: Record<string, unknown> | null = null;
+
+  const response = await handleRequest(
+    new Request("https://example.com/secure-files", {
+      method: "PATCH",
+      body: JSON.stringify({
+        fileId: "file-1",
+        op: "mappings",
+        value: [{ blockId: "block-1", mappings: [{ speaker: "Alice", role: "counselor" }] }],
+      }),
+    }),
+    {
+      authenticate: async () => user,
+      loadOrCreateDek: async () => new Uint8Array(32).fill(6),
+      insertFile: async () => {
+        throw new Error("not used");
+      },
+      getFile: async () => ({ id: "file-1" }),
+      updateFile: async (_fileId: string, _userId: string, payload: Record<string, unknown>) => {
+        updatedPayload = payload;
+        return { id: "file-1" };
+      },
+    } as any,
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(typeof updatedPayload?.["mappings_data"], "object");
 });
