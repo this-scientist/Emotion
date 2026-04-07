@@ -1,0 +1,1 @@
+-- Intentionally empty. Local resets do not require seed data for this project yet.
