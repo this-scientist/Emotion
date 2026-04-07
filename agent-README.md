@@ -1,8 +1,19 @@
-# Emotion · agent 分支
+# Emotion · password 分支
 
 ## 分支说明
 
-`agent` 分支在 `folder` 分支基础上新增了 **AI 督导分析系统**。咨询师完成逐字稿分块与表格标注后，可以选择不同的督导 Agent 对当前块进行 AI 分析，生成结构化督导报告，并支持下载为 Markdown 或 Word 文件。
+`password` 分支在 `agent` 分支基础上新增了 **安全文件加密系统**。实现了用户文件内容的端到端加密保护，确保敏感咨询数据在存储和传输过程中的安全性。
+
+## 🚀 部署状态
+
+✅ **数据库迁移已完成** - 安全文件加密功能已部署到云端Supabase
+✅ **前端构建成功** - 生产版本已就绪
+✅ **代码已推送** - `password` 分支包含完整功能
+
+### 生产环境准备
+1. **Supabase项目**: `Emotion` (ID: `kvwdkesrirxiuosnublw`)
+2. **数据库迁移**: 安全文件加密迁移已应用
+3. **部署指南**: 查看 [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ---
 
