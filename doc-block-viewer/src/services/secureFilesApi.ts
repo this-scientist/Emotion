@@ -18,6 +18,7 @@ async function getAccessToken(): Promise<string> {
   const token = data.session?.access_token
 
   if (!token) {
+    console.warn('用户未登录，无法访问安全文件API')
     throw new Error('UNAUTHENTICATED')
   }
 

@@ -7,7 +7,7 @@ export interface AuthenticatedUser {
 export async function authenticateRequest(req: Request): Promise<AuthenticatedUser> {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     {
       global: {
         headers: {
@@ -23,6 +23,7 @@ export async function authenticateRequest(req: Request): Promise<AuthenticatedUs
   } = await supabase.auth.getUser();
 
   if (error || !user) {
+    console.error("认证失败:", error?.message || "未知错误");
     throw new Error("UNAUTHENTICATED");
   }
 

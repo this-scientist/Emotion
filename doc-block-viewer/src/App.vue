@@ -119,6 +119,14 @@ function handleLogout() {
 async function handleOpenFile(file: UserFile) {
   openFileError.value = ''
 
+  // 检查用户是否已登录
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    openFileError.value = '请先登录后再打开文件'
+    appView.value = 'auth'
+    return
+  }
+
   try {
     const secureFile = await getSecureFile(file.id)
     setDocument(toDocState(secureFile))
@@ -126,8 +134,14 @@ async function handleOpenFile(file: UserFile) {
     showMappingView.value = false
     mappingResult.value = null
     appView.value = 'editor'
-  } catch {
-    openFileError.value = '文件加载失败，请重新打开'
+  } catch (error: any) {
+    console.error('文件加载失败:', error)
+    if (error.message === 'UNAUTHENTICATED' || error.message.includes('JWT')) {
+      openFileError.value = '登录已过期，请重新登录'
+      appView.value = 'auth'
+    } else {
+      openFileError.value = '文件加载失败，请重新打开'
+    }
   }
 }
 
