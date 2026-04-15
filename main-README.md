@@ -6,7 +6,7 @@
 
 ## 🌐 在线预览
 
-**最新版本**: [点击访问](http://c4894a5dce3741c5befed5e4c85642b3.codebuddy.cloudstudio.run)
+**最新版本**: [点击访问](http://9c3e2cdaad80487aafbb2183ba4131d2.codebuddy.cloudstudio.run)
 
 > 提示：在线版本为演示环境，数据仅保存在本地浏览器中。
 
