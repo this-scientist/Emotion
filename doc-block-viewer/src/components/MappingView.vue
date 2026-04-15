@@ -9,7 +9,7 @@ import { applyMapping, type SpeakerMapping, type FormattedLine } from '../utils/
 import { exportMixedDocx, downloadBlob, type DocItem } from '../utils/exportDocx'
 import type { ContentBlock } from '../types/block'
 import type { TableRowData } from './TableEditor.vue'
-import { INTENTS, TECHS, type IntentItem, type TechItem } from '../data/tableData'
+import { INTENTS, TECHS, REACTIONS, type IntentItem, type TechItem } from '../data/tableData'
 
 const props = defineProps<{
   block: ContentBlock
@@ -191,6 +191,21 @@ function toggleTech(item: TechItem) {
   if (i === -1) row.techs.push(item); else row.techs.splice(i, 1)
 }
 function hasTech(item: TechItem) { return inlineActiveRow.value?.techs.some(t => t.subId === item.subId) ?? false }
+
+// 切换内联编辑的当事人反应
+function toggleInlineReaction(reaction: string) {
+  const row = inlineActiveRow.value
+  if (!row) return
+  const current = row.reaction || ''
+  const reactions = current.split(/[,，;；]/).map(r => r.trim()).filter(r => r)
+  if (reactions.includes(reaction)) {
+    const idx = reactions.indexOf(reaction)
+    reactions.splice(idx, 1)
+  } else {
+    reactions.push(reaction)
+  }
+  row.reaction = reactions.join('，')
+}
 
 function removeTable(lineIdx: number, tableId: string) {
   const list = (embeddedTables.value.get(lineIdx) ?? []).filter(t => t.id !== tableId)
@@ -519,7 +534,22 @@ const SCORES = ['1', '2', '3', '4', '5']
                         </div>
                         <div>
                           <label class="block text-xs font-semibold text-gray-600 mb-1.5">当事人反应</label>
-                          <textarea v-model="inlineActiveRow.reaction" rows="3" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl outline-none focus:border-indigo-300 resize-none" placeholder="填写当事人反应..." />
+                          <!-- 快捷选择标签 -->
+                          <div class="flex flex-wrap gap-1 mb-1.5">
+                            <button
+                              v-for="reaction in REACTIONS"
+                              :key="reaction"
+                              @click="toggleInlineReaction(reaction)"
+                              class="px-1.5 py-0.5 text-[10px] rounded border transition-all"
+                              :class="inlineActiveRow.reaction?.includes(reaction)
+                                ? 'bg-indigo-100 border-indigo-300 text-indigo-700'
+                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'"
+                            >
+                              {{ reaction }}
+                            </button>
+                          </div>
+                          <!-- 文本编辑区域 -->
+                          <textarea v-model="inlineActiveRow.reaction" rows="2" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl outline-none focus:border-indigo-300 resize-none" placeholder="选择标签或手动填写..." />
                         </div>
                         <div>
                           <label class="block text-xs font-semibold text-gray-600 mb-1.5">更好的干预（如有）</label>

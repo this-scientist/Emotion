@@ -69,3 +69,30 @@ export function techLabel(item: TechItem): string {
   const sub = item.subType !== '-' ? `（${item.subType}）` : ''
   return `${item.subId} ${item.name}${sub}`
 }
+
+/** 当事人反应选项 */
+export const REACTIONS = [
+  '被理解',
+  '被支持',
+  '有希望',
+  '缓解',
+  '消极想法或行为',
+  '更好的自我理解',
+  '明了',
+  '触动',
+  '负责',
+  '通畅',
+  '新的视角',
+  '受教育',
+  '新的行为方式',
+  '被挑战',
+  '害怕',
+  '恶化',
+  '卡壳',
+  '缺少方向',
+  '迷茫',
+  '被误解',
+  '没有反应',
+] as const
+
+export type ReactionType = typeof REACTIONS[number]

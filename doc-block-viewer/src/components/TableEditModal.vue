@@ -5,7 +5,7 @@
  */
 import { ref, computed, watch } from 'vue'
 import { X, Plus, Trash2, Check, Eye, MessageSquare } from 'lucide-vue-next'
-import { INTENTS, TECHS, intentLabel, techLabel, type IntentItem, type TechItem } from '../data/tableData'
+import { INTENTS, TECHS, REACTIONS, intentLabel, techLabel, type IntentItem, type TechItem } from '../data/tableData'
 import type { TableRowData } from './TableEditor.vue'
 import type { FormattedLine } from '../utils/extractSpeakers'
 
@@ -47,6 +47,23 @@ const activeRow = computed(() => rows.value[activeRowIdx.value])
 function addRow() {
   rows.value.push(createEmptyRow())
   activeRowIdx.value = rows.value.length - 1
+}
+
+// 切换当事人反应选择
+function toggleReaction(reaction: string) {
+  const current = activeRow.value.reaction || ''
+  const reactions = current.split(/[,，;；]/).map(r => r.trim()).filter(r => r)
+  
+  if (reactions.includes(reaction)) {
+    // 已存在则移除
+    const idx = reactions.indexOf(reaction)
+    reactions.splice(idx, 1)
+  } else {
+    // 不存在则添加
+    reactions.push(reaction)
+  }
+  
+  activeRow.value.reaction = reactions.join('，')
 }
 
 function removeRow(idx: number) {
@@ -315,11 +332,26 @@ function getRoleStyle(role: 'counselor' | 'visitor') {
                 <!-- 当事人反应 -->
                 <div>
                   <label class="block text-xs font-semibold text-gray-600 mb-1.5">当事人反应</label>
+                  <!-- 快捷选择标签 -->
+                  <div class="flex flex-wrap gap-1.5 mb-2">
+                    <button
+                      v-for="reaction in REACTIONS"
+                      :key="reaction"
+                      @click="toggleReaction(reaction)"
+                      class="px-2 py-1 text-xs rounded-lg border transition-all"
+                      :class="activeRow.reaction?.includes(reaction) 
+                        ? 'bg-indigo-100 border-indigo-300 text-indigo-700' 
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'"
+                    >
+                      {{ reaction }}
+                    </button>
+                  </div>
+                  <!-- 文本编辑区域 -->
                   <textarea
                     v-model="activeRow.reaction"
-                    rows="3"
+                    rows="2"
                     class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 resize-none transition-all"
-                    placeholder="填写当事人反应..."
+                    placeholder="选择上方标签或手动填写..."
                   />
                 </div>
 
