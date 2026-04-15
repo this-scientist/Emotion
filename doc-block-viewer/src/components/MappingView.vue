@@ -340,15 +340,15 @@ const SCORES = ['1', '2', '3', '4', '5']
                     @keydown.escape.stop="cancelEdit(line)" @keydown.ctrl.enter.stop="saveEdit(line)" autofocus />
                   <div class="px-4 py-1.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">Ctrl+Enter 保存 · Esc 取消</div>
                 </div>
-                <!-- 普通行 -->
-                <div v-else-if="line.data.type === 'plain'" class="px-4 py-2 rounded-xl text-sm text-gray-500 italic hover:bg-gray-100 transition-colors">{{ (line.data as any).text }}</div>
-                <!-- 发言行 - 发言者和内容在同一行 -->
-                <div v-else-if="line.data.type === 'speech'" class="flex items-start gap-3 px-4 py-3 rounded-xl hover:shadow-sm transition-shadow"
+                <!-- 普通行 - 过滤空行 -->
+                <div v-else-if="line.data.type === 'plain' && (line.data as any).text?.trim()" class="px-4 py-2 rounded-xl text-sm text-gray-500 italic hover:bg-gray-100 transition-colors">{{ (line.data as any).text }}</div>
+                <!-- 发言行 - 发言者和内容在同一行，显示角色标签而非真实姓名 -->
+                <div v-else-if="line.data.type === 'speech' && (line.data as any).content?.trim()" class="flex items-start gap-3 px-4 py-3 rounded-xl hover:shadow-sm transition-shadow"
                   :class="[getRoleStyle((line.data as any).role).bg, getRoleStyle((line.data as any).role).border]">
-                  <!-- 发言者标签 - 圆角矩形 -->
+                  <!-- 发言者标签 - 圆角矩形，显示角色而非真实姓名 -->
                   <span class="flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg" 
                     :class="getRoleStyle((line.data as any).role).label">
-                    {{ (line.data as any).speaker }}
+                    {{ (line.data as any).roleLabel }}
                   </span>
                   <!-- 发言内容 -->
                   <div class="flex-1 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap pt-0.5">
@@ -400,12 +400,12 @@ const SCORES = ['1', '2', '3', '4', '5']
                       </button>
                       <div v-if="inlineContextExpanded" class="max-h-44 overflow-y-auto px-3 py-2 space-y-1.5 bg-gray-50/60">
                         <template v-for="(cl, ci) in inlineContextLines" :key="ci">
-                          <div v-if="cl.type === 'speech'" class="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
+                          <div v-if="cl.type === 'speech' && (cl as any).content?.trim()" class="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
                             :class="[getRoleStyle((cl as any).role).bg, 'border-l-2 ' + ((cl as any).role === 'counselor' ? 'border-violet-300' : 'border-sky-300')]">
-                            <span class="flex-shrink-0 font-bold text-[10px] px-2 py-1 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).speaker }}</span>
+                            <span class="flex-shrink-0 font-bold text-[10px] px-2 py-1 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).roleLabel }}</span>
                             <span class="flex-1 text-gray-700">{{ (cl as any).content }}</span>
                           </div>
-                          <div v-else-if="cl.type === 'plain'" class="px-2 py-1 text-xs text-gray-400 italic">{{ (cl as any).text }}</div>
+                          <div v-else-if="cl.type === 'plain' && (cl as any).text?.trim()" class="px-2 py-1 text-xs text-gray-400 italic">{{ (cl as any).text }}</div>
                         </template>
                       </div>
                     </div>
@@ -626,12 +626,12 @@ const SCORES = ['1', '2', '3', '4', '5']
                           </button>
                           <div v-if="inlineContextExpanded" class="max-h-44 overflow-y-auto px-3 py-2 space-y-1.5 bg-gray-50/60">
                             <template v-for="(cl, ci) in inlineContextLines" :key="ci">
-                              <div v-if="cl.type === 'speech'" class="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
+                              <div v-if="cl.type === 'speech' && (cl as any).content?.trim()" class="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
                                 :class="[getRoleStyle((cl as any).role).bg, 'border-l-2 ' + ((cl as any).role === 'counselor' ? 'border-violet-300' : 'border-sky-300')]">
-                                <span class="flex-shrink-0 font-bold text-[10px] px-2 py-1 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).speaker }}</span>
+                                <span class="flex-shrink-0 font-bold text-[10px] px-2 py-1 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).roleLabel }}</span>
                                 <span class="flex-1 text-gray-700">{{ (cl as any).content }}</span>
                               </div>
-                              <div v-else-if="cl.type === 'plain'" class="px-2 py-1 text-xs text-gray-400 italic">{{ (cl as any).text }}</div>
+                              <div v-else-if="cl.type === 'plain' && (cl as any).text?.trim()" class="px-2 py-1 text-xs text-gray-400 italic">{{ (cl as any).text }}</div>
                             </template>
                           </div>
                         </div>
