@@ -1,28 +1,59 @@
 /**
- * 发言稿格式：发言人名和时间戳在同一行，空格分隔
- *
- * 示例：
- *   Orange 2026-03-25 18:04:03
- *   发言内容第一行
- *   发言内容第二行
- *
- *   老赵 2026-03-25 18:04:27
- *   发言内容...
- *
- * 规则：匹配 "任意非空文本 + 空格 + yyyy-MM-dd HH:mm:ss" 的行
- *       开头部分即为发言人姓名
+ * 发言稿格式解析器
+ * 
+ * 支持两种格式：
+ * 1. 旧格式：发言人名 + 空格 + yyyy-MM-dd HH:mm:ss
+ *    示例：Orange 2026-03-25 18:04:03
+ * 
+ * 2. 新格式：发言人名 + (HH:MM:SS)
+ *    示例：段月维(00:01:16):
+ * 
+ * 规则：
+ * - 捕获发言人姓名
+ * - 忽略时间戳（不保留）
+ * - 发言内容在后续行，直到遇到下一个发言人行
  */
 
-// 匹配"发言人 时间戳"整行：捕获组1=发言人，捕获组2=时间戳
-const SPEAKER_LINE_RE = /^(.+?)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*$/
+// 旧格式：发言人 年月日 时分秒
+const OLD_FORMAT_RE = /^(.+?)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*$/
+
+// 新格式：发言人(HH:MM:SS): 或 发言人(HH:MM:SS)
+const NEW_FORMAT_RE = /^(.+?)\s*\((\d{2}:\d{2}:\d{2})\)\s*:?\s*$/
+
+// 新格式（内容在同一行）：发言人(HH:MM:SS): 内容
+const NEW_FORMAT_INLINE_RE = /^(.+?)\s*\((\d{2}:\d{2}:\d{2})\)\s*:\s*(.+)$/
 
 /**
- * 解析一行，返回 { speaker, timestamp } 或 null
+ * 解析一行，返回发言人信息或 null
+ * 不保留时间戳，只提取发言人姓名
  */
-function parseSpeakerLine(line: string): { speaker: string; timestamp: string } | null {
-  const m = line.trim().match(SPEAKER_LINE_RE)
-  if (!m) return null
-  return { speaker: m[1].trim(), timestamp: m[2].trim() }
+function parseSpeakerLine(line: string): { speaker: string; hasContent: boolean; inlineContent?: string } | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+
+  // 先检查是否是内联格式：发言人(时间): 内容
+  const inlineMatch = trimmed.match(NEW_FORMAT_INLINE_RE)
+  if (inlineMatch) {
+    return { 
+      speaker: inlineMatch[1].trim(), 
+      hasContent: true,
+      inlineContent: inlineMatch[3].trim()
+    }
+  }
+
+  // 检查新格式：发言人(时间): 或 发言人(时间)
+  const newMatch = trimmed.match(NEW_FORMAT_RE)
+  if (newMatch) {
+    return { speaker: newMatch[1].trim(), hasContent: false }
+  }
+
+  // 检查旧格式：发言人 年月日 时分秒
+  const oldMatch = trimmed.match(OLD_FORMAT_RE)
+  if (oldMatch) {
+    return { speaker: oldMatch[1].trim(), hasContent: false }
+  }
+
+  return null
 }
 
 /**
@@ -45,11 +76,12 @@ export interface SpeakerMapping {
 }
 
 export type FormattedLine =
-  | { type: 'speech'; roleLabel: string; role: 'counselor' | 'visitor'; speaker: string; timestamp: string; content: string }
+  | { type: 'speech'; roleLabel: string; role: 'counselor' | 'visitor'; speaker: string; content: string }
   | { type: 'plain'; text: string }
 
 /**
  * 将块内容按角色映射格式化，返回结构化行数组
+ * 不显示时间戳，只保留发言者和内容
  */
 export function applyMapping(
   lines: string[],
@@ -67,16 +99,23 @@ export function applyMapping(
 
     if (parsed && allSpeakers.has(parsed.speaker)) {
       // ── 发言块开始 ──
-      const { speaker, timestamp } = parsed
+      const { speaker, hasContent, inlineContent } = parsed
       const role      = counselors.has(speaker) ? 'counselor' : 'visitor'
       const roleLabel = role === 'counselor' ? '咨询师' : '来访者'
 
-      // 收集后续内容行，直到遇到下一个发言人行
+      // 内容行数组
       const contentLines: string[] = []
+
+      // 如果有内联内容，先加入
+      if (hasContent && inlineContent) {
+        contentLines.push(inlineContent)
+      }
+
+      // 收集后续内容行，直到遇到下一个发言人行
       let j = i + 1
       while (j < lines.length) {
         const nextParsed = parseSpeakerLine(lines[j])
-        // 只要下一行是"任意发言人"（不限于已映射的）就停止，避免遗漏段落
+        // 只要下一行是"任意发言人"就停止
         if (nextParsed) break
         contentLines.push(lines[j])
         j++
@@ -87,7 +126,6 @@ export function applyMapping(
         roleLabel,
         role,
         speaker,
-        timestamp,
         content: contentLines.join('\n').trim(),
       })
 

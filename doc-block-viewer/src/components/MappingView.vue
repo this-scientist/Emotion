@@ -201,6 +201,8 @@ function removeTable(lineIdx: number, tableId: string) {
 
 // ── 导出 ──
 const exporting = ref(false)
+const showReward = ref(false)
+const rewardQrcode = new URL('../assets/mm_reward_qrcode_1775632469256.png', import.meta.url).href
 async function handleExport() {
   exporting.value = true
   try {
@@ -285,6 +287,15 @@ const SCORES = ['1', '2', '3', '4', '5']
           :class="exporting ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-500 text-white hover:bg-indigo-600'"
           :disabled="exporting" @click="handleExport"
         ><Download class="w-4 h-4" />{{ exporting ? '导出中…' : '导出为 Word' }}</button>
+        <button
+          class="flex items-center gap1.5 px-3 py-1.5 text-xs text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors"
+          @click="showReward = true"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+          </svg>
+          赞赏作者
+        </button>
       </div>
     </header>
 
@@ -331,15 +342,17 @@ const SCORES = ['1', '2', '3', '4', '5']
                 </div>
                 <!-- 普通行 -->
                 <div v-else-if="line.data.type === 'plain'" class="px-4 py-2 rounded-xl text-sm text-gray-500 italic hover:bg-gray-100 transition-colors">{{ (line.data as any).text }}</div>
-                <!-- 发言行 -->
-                <div v-else-if="line.data.type === 'speech'" class="rounded-xl px-4 py-3 hover:shadow-sm transition-shadow"
+                <!-- 发言行 - 发言者和内容在同一行 -->
+                <div v-else-if="line.data.type === 'speech'" class="flex items-start gap-3 px-4 py-3 rounded-xl hover:shadow-sm transition-shadow"
                   :class="[getRoleStyle((line.data as any).role).bg, getRoleStyle((line.data as any).role).border]">
-                  <div class="flex items-center gap-2 mb-1.5">
-                    <span class="text-xs font-bold px-2 py-0.5 rounded-full" :class="getRoleStyle((line.data as any).role).label">{{ (line.data as any).roleLabel }}</span>
-                    <span class="text-xs text-gray-400">{{ (line.data as any).timestamp }}</span>
-                  </div>
-                  <div class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                    <span class="font-bold">{{ (line.data as any).roleLabel }}：</span>{{ (line.data as any).content }}
+                  <!-- 发言者标签 - 圆角矩形 -->
+                  <span class="flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg" 
+                    :class="getRoleStyle((line.data as any).role).label">
+                    {{ (line.data as any).speaker }}
+                  </span>
+                  <!-- 发言内容 -->
+                  <div class="flex-1 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap pt-0.5">
+                    {{ (line.data as any).content }}
                   </div>
                 </div>
               </div>
@@ -387,13 +400,10 @@ const SCORES = ['1', '2', '3', '4', '5']
                       </button>
                       <div v-if="inlineContextExpanded" class="max-h-44 overflow-y-auto px-3 py-2 space-y-1.5 bg-gray-50/60">
                         <template v-for="(cl, ci) in inlineContextLines" :key="ci">
-                          <div v-if="cl.type === 'speech'" class="rounded-lg px-3 py-2 text-xs"
+                          <div v-if="cl.type === 'speech'" class="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
                             :class="[getRoleStyle((cl as any).role).bg, 'border-l-2 ' + ((cl as any).role === 'counselor' ? 'border-violet-300' : 'border-sky-300')]">
-                            <div class="flex items-center gap-1.5 mb-0.5">
-                              <span class="font-bold text-[10px] px-1.5 py-0.5 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).roleLabel }}</span>
-                              <span class="text-[10px] text-gray-400">{{ (cl as any).timestamp }}</span>
-                            </div>
-                            <div class="text-gray-700">{{ (cl as any).content }}</div>
+                            <span class="flex-shrink-0 font-bold text-[10px] px-2 py-1 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).speaker }}</span>
+                            <span class="flex-1 text-gray-700">{{ (cl as any).content }}</span>
                           </div>
                           <div v-else-if="cl.type === 'plain'" class="px-2 py-1 text-xs text-gray-400 italic">{{ (cl as any).text }}</div>
                         </template>
@@ -616,13 +626,10 @@ const SCORES = ['1', '2', '3', '4', '5']
                           </button>
                           <div v-if="inlineContextExpanded" class="max-h-44 overflow-y-auto px-3 py-2 space-y-1.5 bg-gray-50/60">
                             <template v-for="(cl, ci) in inlineContextLines" :key="ci">
-                              <div v-if="cl.type === 'speech'" class="rounded-lg px-3 py-2 text-xs"
+                              <div v-if="cl.type === 'speech'" class="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
                                 :class="[getRoleStyle((cl as any).role).bg, 'border-l-2 ' + ((cl as any).role === 'counselor' ? 'border-violet-300' : 'border-sky-300')]">
-                                <div class="flex items-center gap-1.5 mb-0.5">
-                                  <span class="font-bold text-[10px] px-1.5 py-0.5 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).roleLabel }}</span>
-                                  <span class="text-[10px] text-gray-400">{{ (cl as any).timestamp }}</span>
-                                </div>
-                                <div class="text-gray-700">{{ (cl as any).content }}</div>
+                                <span class="flex-shrink-0 font-bold text-[10px] px-2 py-1 rounded" :class="getRoleStyle((cl as any).role).label">{{ (cl as any).speaker }}</span>
+                                <span class="flex-1 text-gray-700">{{ (cl as any).content }}</span>
                               </div>
                               <div v-else-if="cl.type === 'plain'" class="px-2 py-1 text-xs text-gray-400 italic">{{ (cl as any).text }}</div>
                             </template>
@@ -794,6 +801,47 @@ const SCORES = ['1', '2', '3', '4', '5']
       </div>
     </main>
   </div>
+  
+  <!-- 赞赏弹窗 -->
+  <Teleport to="body">
+    <Transition name="fade">
+      <div v-if="showReward" class="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4" @click.self="showReward = false">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-800">请作者喝一杯卡布奇诺</h3>
+            <button @click="showReward = false" class="text-gray-400 hover:text-gray-600">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div class="text-center mb-6">
+            <div class="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <p class="text-sm text-gray-600 mb-2">感谢您使用心理督导工具！</p>
+              <p class="text-sm text-gray-500">如果这个工具对您的督导工作有帮助，欢迎通过以下方式支持作者：</p>
+            </div>
+            
+            <div class="bg-gray-100 p-4 rounded-xl mb-4 border border-gray-300">
+              <p class="text-sm font-medium text-gray-700 mb-2">微信赞赏码：</p>
+              <div class="bg-white p-3 rounded-lg border border-gray-300 mb-3">
+                <img :src="rewardQrcode" alt="微信赞赏码" class="w-48 h-48 mx-auto">
+              </div>
+              <p class="text-xs text-gray-500">请截图保存二维码或使用微信扫描</p>
+            </div>
+            
+            <div class="text-xs text-gray-400">
+              <p>您的支持将帮助作者持续改进和维护这个工具</p>
+            </div>
+          </div>
+          
+          <div class="flex justify-center">
+            <button @click="showReward = false" class="px-4 py-2 bg-violet-500 text-white text-sm rounded-lg hover:bg-violet-600 transition-colors">
+              关闭
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>

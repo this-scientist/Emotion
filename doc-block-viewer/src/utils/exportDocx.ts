@@ -31,7 +31,7 @@ function cell(
   return new TableCell({
     rowSpan: opts.rowSpan,
     columnSpan: opts.columnSpan,
-    verticalAlign: opts.vAlign ?? VerticalAlign.CENTER,
+    verticalAlign: opts.vAlign as any ?? VerticalAlign.CENTER,
     width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
     borders: { top: b, bottom: b, left: b, right: b },
     children: [
