@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.1",
     "docx": "^9.6.1",
     "element-plus": "^2.8.0",
     "lucide-vue-next": "^0.468.0",

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { FileUp, FileText } from 'lucide-vue-next'
+import { FileUp, FileText, LogOut } from 'lucide-vue-next'
+import AuthView from './components/AuthView.vue'
 import FileUploader from './components/FileUploader.vue'
 import DocPreview from './components/DocPreview.vue'
 import BlockEditor from './components/BlockEditor.vue'
@@ -11,8 +12,12 @@ import MappingView from './components/MappingView.vue'
 import { useBlockManager } from './composables/useBlockManager'
 import { parseDocument } from './services/docParser'
 import { loadFromStorage } from './utils/storage'
+import { authService } from './services/auth'
 import type { ContentBlock } from './types/block'
 import type { SpeakerMapping } from './utils/extractSpeakers'
+import type { Database } from './lib/supabase'
+
+type Profile = Database['public']['Tables']['profiles']['Row']
 
 const {
   documentLoaded,
@@ -28,6 +33,7 @@ const {
 } = useBlockManager()
 
 const docPreviewRef = ref<InstanceType<typeof DocPreview> | null>(null)
+const currentUser = ref<Profile | null>(null)
 
 // ── 分块编辑弹窗 ──
 const showBlockEditor = ref(false)
@@ -54,6 +60,12 @@ const mappingViewLines = computed<string[]>(() => {
 })
 
 onMounted(() => {
+  // Listen for auth state changes
+  const { data: { subscription } } = authService.onAuthStateChange((user) => {
+    currentUser.value = user
+  })
+
+  // Load saved state
   const savedState = loadFromStorage()
   if (savedState && savedState.content.length > 0) {
     setDocument(savedState)
@@ -127,11 +139,20 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
   showMappingDialog.value = false
   showMappingView.value = true
 }
+
+// 登出
+async function handleLogout() {
+  await authService.signOut()
+  currentUser.value = null
+}
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-gray-50">
+  <!-- Auth View -->
+  <AuthView v-if="!currentUser" @authenticated="(user) => currentUser = user" />
 
+  <!-- Main App -->
+  <div v-else class="h-screen flex flex-col bg-gray-50">
     <!-- 重新上传确认弹窗 -->
     <Teleport to="body">
       <Transition name="fade">
@@ -169,9 +190,20 @@ function handleMappingConfirm(mappings: SpeakerMapping[], block: ContentBlock) {
           <h1 class="text-base font-semibold text-gray-800">文档分块预览</h1>
         </div>
 
-        <div v-if="documentLoaded" class="flex items-center gap-4">
-          <span class="text-sm text-gray-400 max-w-xs truncate">{{ fileName }}</span>
+        <div class="flex items-center gap-4">
+          <div v-if="currentUser" class="flex items-center gap-3">
+            <span class="text-sm text-gray-600">{{ currentUser.display_name || currentUser.username }}</span>
+            <button
+              class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+              @click="handleLogout"
+            >
+              <LogOut class="w-4 h-4" />
+              退出
+            </button>
+          </div>
+          <span v-if="documentLoaded" class="text-sm text-gray-400 max-w-xs truncate">{{ fileName }}</span>
           <button
+            v-if="documentLoaded"
             class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"
             @click="handleReset"
           >
